@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id            Int       @id @default(autoincrement())
+  roomId        String    @unique @db.VarChar(8)
+  createdAt     DateTime  @default(now()) @db.DateTime(0)
+  updatedAt     DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  expiresAt     DateTime  @db.DateTime(0)
+  isPublic      Boolean   @default(false)
+  adminUser     String    @db.VarChar(255)
+  messages      Message[]
+  participants  RoomParticipant[]
+  invitations   Invitation[]
+  owner         User      @relation(name: "OwnedRooms", fields: [adminUser], references: [userId]) // Add this line
+}
+
+model Message {
+  id          Int       @id @default(autoincrement())
+  roomId      String    @db.VarChar(8)
+  user        String    @db.VarChar(255)
+  messageText String    @db.Text
+  createdAt   DateTime  @default(now()) @db.DateTime(0)
+  room        Room      @relation(fields: [roomId], references: [roomId], onDelete: Cascade)
+}
+
+model User {
+  id          Int               @id @default(autoincrement())
+  userId      String            @unique @db.VarChar(255) // ユーザーID (例: UUID)
+  passwordHash String            @db.VarChar(255)
+  createdAt   DateTime          @default(now()) @db.DateTime(0)
+  updatedAt   DateTime          @default(now()) @updatedAt @db.DateTime(0)
+  RoomParticipant RoomParticipant[]
+  ownedRooms    Room[]            @relation("OwnedRooms")
+  sentInvitations Invitation[]    @relation("SentInvitations")
+  receivedInvitations Invitation[] @relation("ReceivedInvitations")
+}
+
+model RoomParticipant {
+  id        Int      @id @default(autoincrement())
+  roomId    String   @db.VarChar(8)
+  userId    String   @db.VarChar(255)
+  joinedAt  DateTime @default(now()) @db.DateTime(0)
+  room      Room     @relation(fields: [roomId], references: [roomId], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [userId])
+
+  @@unique([roomId, userId]) // 複合ユニークキー (同じユーザーは同じルームに一度しか参加できない)
+}
+
+model Invitation {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique @db.VarChar(36) // UUID 形式の招待コード
+  roomId      String   @db.VarChar(8)
+  senderId    String   @db.VarChar(255)
+  receiverId  String   @db.VarChar(255)
+  createdAt   DateTime @default(now()) @db.DateTime(0)
+  expiresAt   DateTime @db.DateTime(0)
+  room        Room     @relation(fields: [roomId], references: [roomId], onDelete: Cascade)
+  sender      User     @relation("SentInvitations", fields: [senderId], references: [userId])
+  receiver    User?    @relation("ReceivedInvitations", fields: [receiverId], references: [userId])
+
+  @@index([code]) // 招待コード検索を高速化するためのインデックス
+}
